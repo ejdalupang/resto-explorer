@@ -534,7 +534,7 @@ function exportData() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "bgc-makati-eats-backup.json";
+  a.download = "explo-resto-backup.json";
   a.click();
   URL.revokeObjectURL(url);
 }
