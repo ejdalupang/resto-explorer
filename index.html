@@ -10,7 +10,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <link rel="stylesheet" href="style.css" />
 <script>
   // Set theme before first paint to avoid a flash of the wrong theme.
@@ -31,15 +30,10 @@
     <button id="theme-toggle" aria-label="Toggle dark mode">🌙</button>
   </header>
 
-  <div class="map-wrap" id="map-wrap">
-    <div class="map-inner"><div id="map"></div></div>
-    <button id="map-toggle" aria-label="Toggle map">⌄</button>
-  </div>
-
   <main>
     <div class="view active" id="view-evergreens">
       <div class="banner">
-        Location, hours, price, and notes here are whatever you save yourself — OpenStreetMap can only help find the pin on the map. Open a card's edit (pencil) to fill them in.
+        Location, hours, price, and notes here are whatever you save yourself. Tap ✎ Edit on a card — "Look up address" can suggest one from OpenStreetMap, but small local spots often aren't listed there, so filling it in yourself is the reliable option.
       </div>
       <div class="search-bar">
         <span class="search-icon">⌕</span>
@@ -62,9 +56,13 @@
         Pulled live from OpenStreetMap. Coverage, hours, and cuisine tags are community-submitted, so double check anything promising on Google Maps before you go. Dish search here is best-effort (e.g. "pork" also matches Korean/Chinese/BBQ) since OSM tags cuisines, not dishes.
       </div>
       <div class="discover-controls">
-        <button data-area="bgc">Near BGC</button>
-        <button data-area="makati">Near Makati</button>
+        <button data-area="bgc">BGC</button>
+        <button data-area="makati">Makati</button>
+        <button id="use-location">📍 Near me</button>
       </div>
+      <select id="area-select">
+        <option value="" disabled selected>More areas — Metro Manila, Cavite, Tagaytay, Batangas, Bulacan, Pampanga…</option>
+      </select>
       <div class="search-bar">
         <span class="search-icon">⌕</span>
         <input type="search" id="food-search-discover" placeholder="Search food e.g. ice cream, chicken..." />
@@ -86,7 +84,7 @@
   <div class="sheet" id="settings-sheet">
     <div class="sheet-handle"></div>
     <h4>More</h4>
-    <button id="locate-all">📍 Locate all evergreens</button>
+    <button id="locate-all">🔍 Look up all addresses</button>
     <button id="export-btn">⬇️ Export backup</button>
     <button id="import-btn" onclick="document.getElementById('import-input').click()">⬆️ Import backup</button>
     <input type="file" id="import-input" accept="application/json" style="display:none" />
@@ -108,7 +106,6 @@
   </nav>
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="data.js"></script>
 <script src="app.js"></script>
 </body>

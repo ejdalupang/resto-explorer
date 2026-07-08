@@ -1,19 +1,6 @@
 const STORAGE_KEY = "bgc-makati-eats-v1";
 const THEME_KEY = "bgc-makati-theme";
-const MAP_COLLAPSE_KEY = "bgc-makati-map-collapsed";
 const CATEGORIES = ["Meal", "Dessert"];
-
-function setMapCollapsed(collapsed) {
-  document.getElementById("map-wrap").classList.toggle("collapsed", collapsed);
-  document.getElementById("map-toggle").textContent = collapsed ? "⌃" : "⌄";
-  localStorage.setItem(MAP_COLLAPSE_KEY, collapsed ? "1" : "0");
-  if (!collapsed) setTimeout(() => map && map.invalidateSize(), 260);
-}
-
-function toggleMap() {
-  const collapsed = !document.getElementById("map-wrap").classList.contains("collapsed");
-  setMapCollapsed(collapsed);
-}
 
 function getTheme() {
   return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
@@ -43,7 +30,6 @@ function saveState() {
 }
 
 const state = loadState();
-let map, evergreenMarkers = {}, discoverMarkers = [];
 let evergreenFilter = { cuisineGroup: "all", category: "all" };
 let discoverFilter = { cuisineGroup: "all", category: "all" };
 let foodQuery = ""; // shared between Home and Discover so it doesn't reset when switching tabs
@@ -60,18 +46,6 @@ function reviewsLink(name, area) {
   return `https://www.google.com/search?q=${q}`;
 }
 
-function initMap() {
-  map = L.map("map", { zoomControl: false }).setView(
-    [AREAS.bgc.lat, AREAS.bgc.lng],
-    14
-  );
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution: "&copy; OpenStreetMap contributors",
-  }).addTo(map);
-  L.control.zoom({ position: "bottomright" }).addTo(map);
-}
-
 async function geocode(query) {
   const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(
     query
@@ -80,7 +54,11 @@ async function geocode(query) {
   if (!res.ok) throw new Error("geocode failed");
   const data = await res.json();
   if (!data.length) return null;
-  return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+  return {
+    lat: parseFloat(data[0].lat),
+    lng: parseFloat(data[0].lon),
+    address: data[0].display_name,
+  };
 }
 
 function sleep(ms) {
@@ -182,22 +160,27 @@ function populateFilterOptions(selectEl, groups, current) {
     .join("");
 }
 
-function upsertEvergreenMarker(item) {
-  const data = getEvergreenData(item.id);
-  if (evergreenMarkers[item.id]) {
-    map.removeLayer(evergreenMarkers[item.id]);
-    delete evergreenMarkers[item.id];
-  }
-  if (data.lat && data.lng) {
-    const marker = L.circleMarker([data.lat, data.lng], {
-      radius: 7,
-      color: "#2c6e2c",
-      fillColor: "#4caf50",
-      fillOpacity: 0.9,
-    }).addTo(map);
-    marker.bindPopup(`<b>${item.name}</b><br>${getCuisine(item, data)}`);
-    evergreenMarkers[item.id] = marker;
-  }
+function populateAreaSelect() {
+  const select = document.getElementById("area-select");
+  const regions = {};
+  Object.entries(AREAS).forEach(([key, area]) => {
+    if (!regions[area.region]) regions[area.region] = [];
+    regions[area.region].push({ key, label: area.label });
+  });
+  const placeholder = select.querySelector("option");
+  select.innerHTML = "";
+  select.appendChild(placeholder);
+  Object.keys(regions).forEach((region) => {
+    const group = document.createElement("optgroup");
+    group.label = region;
+    regions[region].forEach(({ key, label }) => {
+      const option = document.createElement("option");
+      option.value = key;
+      option.textContent = label;
+      group.appendChild(option);
+    });
+    select.appendChild(group);
+  });
 }
 
 function renderEvergreens() {
@@ -288,7 +271,7 @@ function renderEvergreens() {
           ).join("")}
         </select>
         <input data-field="address" placeholder="Address / mall / branch" value="${data.address || ""}">
-        <button type="button" class="locate-inline locate" data-id="${item.id}">📍 Locate on map</button>
+        <button type="button" class="locate-inline locate" data-id="${item.id}">🔍 Look up address</button>
         <input data-field="hours" placeholder="Opening hours e.g. 11am-10pm daily" value="${data.hours || ""}">
         <input data-field="price" placeholder="Price range e.g. ₱₱ (₱300-600/head)" value="${data.price || ""}">
         <textarea data-field="notes" placeholder="Notes / go-to order">${data.notes || ""}</textarea>
@@ -296,7 +279,6 @@ function renderEvergreens() {
       </div>
     `;
     list.appendChild(card);
-    upsertEvergreenMarker(item);
   });
 
   list.querySelectorAll(".edit-toggle").forEach((btn) => {
@@ -319,25 +301,24 @@ function renderEvergreens() {
 
   list.querySelectorAll(".locate").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      btn.textContent = "Locating…";
+      btn.textContent = "Looking up…";
       const status = document.getElementById("evergreen-status");
       const item = EVERGREENS.find((e) => e.id === btn.dataset.id);
       const data = getEvergreenData(item.id);
       const area = data.area || "BGC";
       try {
-        const coords = await geocode(`${item.name}, ${area}, Metro Manila, Philippines`);
-        if (coords) {
-          setEvergreenData(item.id, coords);
-          map.setView([coords.lat, coords.lng], 16);
+        const found = await geocode(`${item.name}, ${area}, Metro Manila, Philippines`);
+        if (found) {
+          setEvergreenData(item.id, { address: found.address });
           status.textContent = "";
           renderEvergreens();
         } else {
-          status.textContent = `Couldn't find "${item.name}" on OpenStreetMap — fill in the address manually via Edit instead.`;
+          status.textContent = `Couldn't find "${item.name}" on OpenStreetMap — fill in the address manually instead.`;
         }
       } catch (e) {
         status.textContent = "Lookup failed — check your connection and try again.";
       }
-      btn.textContent = "Locate on map";
+      btn.textContent = "🔍 Look up address";
     });
   });
 }
@@ -346,21 +327,16 @@ async function locateAllEvergreens() {
   const status = document.getElementById("evergreen-status");
   for (const item of EVERGREENS) {
     const data = getEvergreenData(item.id);
-    if (data.lat && data.lng) continue;
-    status.textContent = `Locating ${item.name}…`;
+    if (data.address) continue;
+    status.textContent = `Looking up ${item.name}…`;
     try {
-      const coords = await geocode(`${item.name}, ${data.area || "BGC"}, Metro Manila, Philippines`);
-      if (coords) setEvergreenData(item.id, coords);
+      const found = await geocode(`${item.name}, ${data.area || "BGC"}, Metro Manila, Philippines`);
+      if (found) setEvergreenData(item.id, { address: found.address });
     } catch (e) {}
     await sleep(1100); // respect Nominatim's 1 req/sec usage policy
   }
-  status.textContent = "Done locating what OpenStreetMap could find.";
+  status.textContent = "Done looking up what OpenStreetMap could find.";
   renderEvergreens();
-}
-
-function clearDiscoverMarkers() {
-  discoverMarkers.forEach((m) => map.removeLayer(m));
-  discoverMarkers = [];
 }
 
 function haversine(lat1, lng1, lat2, lng2) {
@@ -400,19 +376,19 @@ function isKnownEvergreen(name) {
   );
 }
 
-async function discover(areaKey) {
+async function discover(areaKeyOrCenter) {
   const status = document.getElementById("discover-status");
   const list = document.getElementById("discover-list");
-  clearDiscoverMarkers();
   list.innerHTML = "";
   status.textContent = "Searching OpenStreetMap for nearby places…";
   discoverFilter = { cuisineGroup: "all", category: "all" };
 
-  const area = AREAS[areaKey];
-  map.setView([area.lat, area.lng], 15);
+  const area =
+    typeof areaKeyOrCenter === "string" ? AREAS[areaKeyOrCenter] : areaKeyOrCenter;
+  const radius = area.radius || 1500;
 
   try {
-    const data = await runOverpassQuery(area.lat, area.lng, 1500);
+    const data = await runOverpassQuery(area.lat, area.lng, radius);
     const seen = new Set();
     const results = [];
     for (const el of data.elements) {
@@ -454,7 +430,6 @@ function renderDiscoverResults() {
   const groups = [...new Set(lastDiscoverResults.map((r) => r.cuisineGroup))].sort();
   populateFilterOptions(cuisineSelect, groups, discoverFilter.cuisineGroup);
 
-  clearDiscoverMarkers();
   list.innerHTML = "";
 
   const query = foodQuery.trim().toLowerCase();
@@ -483,15 +458,6 @@ function renderDiscoverResults() {
   }
 
   filtered.slice(0, 40).forEach((r) => {
-    const marker = L.circleMarker([r.lat, r.lng], {
-      radius: 6,
-      color: "#1a4d8f",
-      fillColor: "#4a90d9",
-      fillOpacity: 0.9,
-    }).addTo(map);
-    marker.bindPopup(`<b>${r.name}</b><br>${r.cuisine}`);
-    discoverMarkers.push(marker);
-
     const color = colorFor(r.cuisineGroup);
     const card = document.createElement("div");
     card.className = "card";
@@ -529,8 +495,6 @@ function renderDiscoverResults() {
         });
       }
       setEvergreenData(id, {
-        lat: r.lat,
-        lng: r.lng,
         address: r.address,
         hours: r.hours,
         area: lastDiscoverAreaLabel,
@@ -596,11 +560,7 @@ document.addEventListener("DOMContentLoaded", () => {
   applyThemeIcon();
   document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
 
-  initMap();
   renderEvergreens();
-
-  document.getElementById("map-toggle").addEventListener("click", toggleMap);
-  if (localStorage.getItem(MAP_COLLAPSE_KEY) === "1") setMapCollapsed(true);
 
   document.querySelectorAll(".bottom-nav button[data-tab]").forEach((btn) => {
     btn.addEventListener("click", () => switchTab(btn.dataset.tab));
@@ -614,14 +574,53 @@ document.addEventListener("DOMContentLoaded", () => {
     locateAllEvergreens();
   });
 
-  document.querySelectorAll(".discover-controls button").forEach((btn) => {
+  populateAreaSelect();
+
+  function clearButtonActiveStates() {
+    document
+      .querySelectorAll(".discover-controls button")
+      .forEach((b) => b.classList.remove("active"));
+  }
+
+  document.querySelectorAll(".discover-controls button[data-area]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      document
-        .querySelectorAll(".discover-controls button")
-        .forEach((b) => b.classList.remove("active"));
+      clearButtonActiveStates();
       btn.classList.add("active");
+      document.getElementById("area-select").selectedIndex = 0;
       discover(btn.dataset.area);
     });
+  });
+
+  document.getElementById("use-location").addEventListener("click", () => {
+    const status = document.getElementById("discover-status");
+    if (!navigator.geolocation) {
+      status.textContent = "Your browser doesn't support location access.";
+      return;
+    }
+    clearButtonActiveStates();
+    document.getElementById("use-location").classList.add("active");
+    document.getElementById("area-select").selectedIndex = 0;
+    status.textContent = "Getting your location…";
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        discover({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          label: "your location",
+        });
+      },
+      () => {
+        status.textContent =
+          "Couldn't get your location — check your browser's location permission and try again.";
+      },
+      { timeout: 10000 }
+    );
+  });
+
+  document.getElementById("area-select").addEventListener("change", (e) => {
+    if (!e.target.value) return;
+    clearButtonActiveStates();
+    discover(e.target.value);
   });
 
   document.getElementById("cuisine-filter-evergreen").addEventListener("change", (e) => {
