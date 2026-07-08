@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="theme-color" content="#17161a" />
+<title>BGC & Makati Eats</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="style.css" />
+<script>
+  // Set theme before first paint to avoid a flash of the wrong theme.
+  (function () {
+    var saved = localStorage.getItem("bgc-makati-theme");
+    var theme = saved || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div>
+      <h1>BGC &amp; Makati</h1>
+      <p>Evergreens you love + new spots to try</p>
+    </div>
+    <button id="theme-toggle" aria-label="Toggle dark mode">🌙</button>
+  </header>
+
+  <div id="map"></div>
+
+  <main>
+    <div class="view active" id="view-evergreens">
+      <div class="banner">
+        Location, hours, price, and notes here are whatever you save yourself — OpenStreetMap can only help find the pin on the map. Open a card's edit (pencil) to fill them in.
+      </div>
+      <div class="filter-bar">
+        <div class="search-pill">
+          <span class="search-icon">⌕</span>
+          <select id="cuisine-filter-evergreen"></select>
+        </div>
+        <div class="segmented" id="category-filter-evergreen">
+          <button data-cat="all" class="active">All</button>
+          <button data-cat="Meal">Meal</button>
+          <button data-cat="Dessert">Dessert</button>
+        </div>
+      </div>
+      <div class="status" id="evergreen-status"></div>
+      <div id="evergreen-list"></div>
+    </div>
+
+    <div class="view" id="view-discover">
+      <div class="banner">
+        Pulled live from OpenStreetMap. Coverage, hours, and cuisine tags are community-submitted, so double check anything promising on Google Maps before you go.
+      </div>
+      <div class="discover-controls">
+        <button data-area="bgc">Near BGC</button>
+        <button data-area="makati">Near Makati</button>
+      </div>
+      <div class="filter-bar">
+        <div class="search-pill">
+          <span class="search-icon">⌕</span>
+          <select id="cuisine-filter-discover"></select>
+        </div>
+        <div class="segmented" id="category-filter-discover">
+          <button data-cat="all" class="active">All</button>
+          <button data-cat="Meal">Meal</button>
+          <button data-cat="Dessert">Dessert</button>
+        </div>
+      </div>
+      <div class="status" id="discover-status">Pick an area to search.</div>
+      <div id="discover-list"></div>
+    </div>
+  </main>
+
+  <div class="sheet-backdrop" id="settings-backdrop"></div>
+  <div class="sheet" id="settings-sheet">
+    <div class="sheet-handle"></div>
+    <h4>More</h4>
+    <button id="locate-all">📍 Locate all evergreens</button>
+    <button id="export-btn">⬇️ Export backup</button>
+    <button id="import-btn" onclick="document.getElementById('import-input').click()">⬆️ Import backup</button>
+    <input type="file" id="import-input" accept="application/json" style="display:none" />
+  </div>
+
+  <nav class="bottom-nav">
+    <button data-tab="evergreens" class="active">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
+      <span>Home</span>
+    </button>
+    <button data-tab="discover">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15 9l-2 6-6 2 2-6z"/></svg>
+      <span>Discover</span>
+    </button>
+    <button id="settings-toggle">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1-1.6 1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1 1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.9.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.9-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.9V9a1.7 1.7 0 001.5 1h.1a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>
+      <span>More</span>
+    </button>
+  </nav>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
