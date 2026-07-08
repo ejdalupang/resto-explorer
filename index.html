@@ -31,18 +31,22 @@
     <button id="theme-toggle" aria-label="Toggle dark mode">🌙</button>
   </header>
 
-  <div id="map"></div>
+  <div class="map-wrap" id="map-wrap">
+    <div class="map-inner"><div id="map"></div></div>
+    <button id="map-toggle" aria-label="Toggle map">⌄</button>
+  </div>
 
   <main>
     <div class="view active" id="view-evergreens">
       <div class="banner">
         Location, hours, price, and notes here are whatever you save yourself — OpenStreetMap can only help find the pin on the map. Open a card's edit (pencil) to fill them in.
       </div>
+      <div class="search-bar">
+        <span class="search-icon">⌕</span>
+        <input type="search" id="food-search-evergreen" placeholder="Search food e.g. ice cream, chicken..." />
+      </div>
       <div class="filter-bar">
-        <div class="search-pill">
-          <span class="search-icon">⌕</span>
-          <select id="cuisine-filter-evergreen"></select>
-        </div>
+        <select id="cuisine-filter-evergreen"></select>
         <div class="segmented" id="category-filter-evergreen">
           <button data-cat="all" class="active">All</button>
           <button data-cat="Meal">Meal</button>
@@ -55,17 +59,18 @@
 
     <div class="view" id="view-discover">
       <div class="banner">
-        Pulled live from OpenStreetMap. Coverage, hours, and cuisine tags are community-submitted, so double check anything promising on Google Maps before you go.
+        Pulled live from OpenStreetMap. Coverage, hours, and cuisine tags are community-submitted, so double check anything promising on Google Maps before you go. Dish search here is best-effort (e.g. "pork" also matches Korean/Chinese/BBQ) since OSM tags cuisines, not dishes.
       </div>
       <div class="discover-controls">
         <button data-area="bgc">Near BGC</button>
         <button data-area="makati">Near Makati</button>
       </div>
+      <div class="search-bar">
+        <span class="search-icon">⌕</span>
+        <input type="search" id="food-search-discover" placeholder="Search food e.g. ice cream, chicken..." />
+      </div>
       <div class="filter-bar">
-        <div class="search-pill">
-          <span class="search-icon">⌕</span>
-          <select id="cuisine-filter-discover"></select>
-        </div>
+        <select id="cuisine-filter-discover"></select>
         <div class="segmented" id="category-filter-discover">
           <button data-cat="all" class="active">All</button>
           <button data-cat="Meal">Meal</button>

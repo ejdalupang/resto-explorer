@@ -1,6 +1,19 @@
 const STORAGE_KEY = "bgc-makati-eats-v1";
 const THEME_KEY = "bgc-makati-theme";
+const MAP_COLLAPSE_KEY = "bgc-makati-map-collapsed";
 const CATEGORIES = ["Meal", "Dessert"];
+
+function setMapCollapsed(collapsed) {
+  document.getElementById("map-wrap").classList.toggle("collapsed", collapsed);
+  document.getElementById("map-toggle").textContent = collapsed ? "⌃" : "⌄";
+  localStorage.setItem(MAP_COLLAPSE_KEY, collapsed ? "1" : "0");
+  if (!collapsed) setTimeout(() => map && map.invalidateSize(), 260);
+}
+
+function toggleMap() {
+  const collapsed = !document.getElementById("map-wrap").classList.contains("collapsed");
+  setMapCollapsed(collapsed);
+}
 
 function getTheme() {
   return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
@@ -33,6 +46,7 @@ const state = loadState();
 let map, evergreenMarkers = {}, discoverMarkers = [];
 let evergreenFilter = { cuisineGroup: "all", category: "all" };
 let discoverFilter = { cuisineGroup: "all", category: "all" };
+let foodQuery = ""; // shared between Home and Discover so it doesn't reset when switching tabs
 let lastDiscoverResults = [];
 let lastDiscoverAreaLabel = "";
 
@@ -88,6 +102,27 @@ function getCuisineGroup(item, data) {
 function getCategory(item, data) {
   return (data && data.category) || item.category || "Meal";
 }
+
+function getDishes(item, data) {
+  return (data && data.dishes) || item.dishes || "";
+}
+
+// OpenStreetMap almost never tags a restaurant with the literal dish/protein a
+// diner searches for ("pork", "beef") — it tags the cuisine ("korean", "hotpot").
+// This maps common food searches to the cuisine tags that plausibly serve them,
+// so Discover search isn't limited to exact substring matches on sparse tags.
+const FOOD_SYNONYMS = {
+  pork: ["korean", "chinese", "filipino", "barbecue", "bbq", "hotpot", "vietnamese", "taiwanese", "hongkong"],
+  beef: ["steak", "korean", "japanese", "american", "brazilian", "burger", "hotpot", "vietnamese"],
+  chicken: ["chicken", "fried_chicken", "korean", "filipino", "kebab", "american", "wings"],
+  lamb: ["kebab", "middle_eastern", "greek", "indian", "turkish", "persian", "lebanese"],
+  seafood: ["seafood", "sushi", "japanese", "fish"],
+  fish: ["seafood", "sushi", "fish_and_chips", "japanese"],
+  noodles: ["noodle", "ramen", "chinese", "vietnamese", "thai", "asian", "pho"],
+  rice: ["asian", "filipino", "chinese", "japanese", "korean"],
+  vegetarian: ["vegetarian", "vegan", "salad", "indian"],
+  spicy: ["korean", "thai", "indian", "sichuan", "mexican"],
+};
 
 function titleCase(str) {
   return str
@@ -170,6 +205,7 @@ function renderEvergreens() {
   populateFilterOptions(cuisineSelect, groups, evergreenFilter.cuisineGroup);
 
   list.innerHTML = "";
+  const query = foodQuery.trim().toLowerCase();
   const filtered = EVERGREENS.filter((item) => {
     const data = getEvergreenData(item.id);
     const groupOk =
@@ -178,7 +214,19 @@ function renderEvergreens() {
     const catOk =
       evergreenFilter.category === "all" ||
       getCategory(item, data) === evergreenFilter.category;
-    return groupOk && catOk;
+    const textOk =
+      !query ||
+      [
+        item.name,
+        getCuisine(item, data),
+        getCuisineGroup(item, data),
+        getDishes(item, data),
+        data.notes || "",
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(query);
+    return groupOk && catOk && textOk;
   });
 
   if (!filtered.length) {
@@ -190,6 +238,7 @@ function renderEvergreens() {
     const cuisine = getCuisine(item, data);
     const cuisineGroup = getCuisineGroup(item, data);
     const category = getCategory(item, data);
+    const dishes = getDishes(item, data);
     const color = colorFor(cuisineGroup);
     const card = document.createElement("div");
     card.className = "card";
@@ -205,11 +254,12 @@ function renderEvergreens() {
         <span class="tag">${category}</span>
       </div>
       ${
-        data.address || data.hours || data.price || data.notes
+        data.address || data.hours || data.price || data.notes || dishes
           ? `<div class="meta">
               ${data.address ? `<div>📍 ${data.address}</div>` : ""}
               ${data.hours ? `<div>🕒 ${data.hours}</div>` : ""}
               ${data.price ? `<div>💰 ${data.price}</div>` : ""}
+              ${dishes ? `<div>🍽️ ${dishes}</div>` : ""}
               ${data.notes ? `<div>📝 ${data.notes}</div>` : ""}
             </div>`
           : `<div class="meta">📍 No address saved yet — tap ✎ to add details</div>`
@@ -225,6 +275,7 @@ function renderEvergreens() {
         </select>
         <input data-field="cuisine" placeholder="Cuisine label e.g. Japanese Ramen" value="${cuisine}">
         <input data-field="cuisineGroup" placeholder="Cuisine group for filtering e.g. Japanese" value="${cuisineGroup}">
+        <input data-field="dishes" placeholder="Dishes, comma-separated e.g. chicken, ramen, pork" value="${dishes}">
         <select data-field="category">
           ${CATEGORIES.map(
             (c) => `<option value="${c}" ${category === c ? "selected" : ""}>${c}</option>`
@@ -400,15 +451,23 @@ function renderDiscoverResults() {
   clearDiscoverMarkers();
   list.innerHTML = "";
 
+  const query = foodQuery.trim().toLowerCase();
+  const synonyms = query
+    .split(/\s+/)
+    .flatMap((word) => FOOD_SYNONYMS[word] || []);
   const filtered = lastDiscoverResults.filter((r) => {
     const groupOk =
       discoverFilter.cuisineGroup === "all" || r.cuisineGroup === discoverFilter.cuisineGroup;
     const catOk = discoverFilter.category === "all" || r.category === discoverFilter.category;
-    return groupOk && catOk;
+    const haystack = [r.name, r.cuisine, r.cuisineGroup].join(" ").toLowerCase();
+    const textOk =
+      !query || haystack.includes(query) || synonyms.some((s) => haystack.includes(s));
+    return groupOk && catOk && textOk;
   });
 
   const status = document.getElementById("discover-status");
-  const isFiltered = discoverFilter.cuisineGroup !== "all" || discoverFilter.category !== "all";
+  const isFiltered =
+    discoverFilter.cuisineGroup !== "all" || discoverFilter.category !== "all" || !!query;
   status.textContent = isFiltered
     ? `Showing ${filtered.length} of ${lastDiscoverResults.length} spot(s) near ${lastDiscoverAreaLabel} matching this filter.`
     : `Found ${lastDiscoverResults.length} spot(s) near ${lastDiscoverAreaLabel} not already in your evergreen list.`;
@@ -533,6 +592,9 @@ document.addEventListener("DOMContentLoaded", () => {
   initMap();
   renderEvergreens();
 
+  document.getElementById("map-toggle").addEventListener("click", toggleMap);
+  if (localStorage.getItem(MAP_COLLAPSE_KEY) === "1") setMapCollapsed(true);
+
   document.querySelectorAll(".bottom-nav button[data-tab]").forEach((btn) => {
     btn.addEventListener("click", () => switchTab(btn.dataset.tab));
   });
@@ -589,5 +651,18 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("import-input").addEventListener("change", (e) => {
     if (e.target.files[0]) importData(e.target.files[0]);
     closeSheet();
+  });
+
+  document.getElementById("food-search-evergreen").addEventListener("input", (e) => {
+    foodQuery = e.target.value;
+    document.getElementById("food-search-discover").value = foodQuery;
+    renderEvergreens();
+    if (lastDiscoverResults.length) renderDiscoverResults();
+  });
+  document.getElementById("food-search-discover").addEventListener("input", (e) => {
+    foodQuery = e.target.value;
+    document.getElementById("food-search-evergreen").value = foodQuery;
+    renderEvergreens();
+    if (lastDiscoverResults.length) renderDiscoverResults();
   });
 });
