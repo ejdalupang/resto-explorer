@@ -55,6 +55,11 @@ function googleMapsLink(name, area) {
   return `https://www.google.com/maps/search/?api=1&query=${q}`;
 }
 
+function reviewsLink(name, area) {
+  const q = encodeURIComponent(`${name} ${area || ""} Philippines reviews`);
+  return `https://www.google.com/search?q=${q}`;
+}
+
 function initMap() {
   map = L.map("map", { zoomControl: false }).setView(
     [AREAS.bgc.lat, AREAS.bgc.lng],
@@ -265,6 +270,7 @@ function renderEvergreens() {
           : `<div class="meta">📍 No address saved yet — tap ✎ to add details</div>`
       }
       <div class="card-actions">
+        <a class="icon-btn" target="_blank" href="${reviewsLink(item.name, data.area || "BGC Makati")}" aria-label="See reviews">★</a>
         <a class="icon-btn" target="_blank" href="${googleMapsLink(item.name, data.area || "BGC Makati")}" aria-label="Open in Google Maps">➜</a>
         <button class="icon-btn edit-toggle" data-id="${item.id}" aria-label="Edit">✎</button>
       </div>
@@ -506,6 +512,7 @@ function renderDiscoverResults() {
       </div>
       <div class="card-actions">
         ${r.website ? `<a class="icon-btn" target="_blank" href="${r.website}" aria-label="Website">🌐</a>` : ""}
+        <a class="icon-btn" target="_blank" href="${reviewsLink(r.name, lastDiscoverAreaLabel)}" aria-label="See reviews">★</a>
         <a class="icon-btn" target="_blank" href="${googleMapsLink(r.name, lastDiscoverAreaLabel)}" aria-label="Open in Google Maps">➜</a>
         <button class="add-evergreen icon-btn">+ Add</button>
       </div>
